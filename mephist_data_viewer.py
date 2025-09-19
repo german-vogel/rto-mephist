@@ -190,13 +190,17 @@ class TokamakApp:
         self.last_cursor_x = None
         self.motion_cid = None
         self.right_click_cid = None
+        
+        # Variables for zoom synchronization
+        self.syncing_zoom = False
+        self.time_axes = []  # Will store references to time-based axes
 
         self.create_widgets()
 
     def create_widgets(self):
         self.main_frame = tk.Frame(self.master)
         self.main_frame.pack(fill=tk.BOTH, expand=True)
-        
+    
         self.top_button_frame = tk.Frame(self.main_frame)
         self.top_button_frame.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5)
 
@@ -214,17 +218,18 @@ class TokamakApp:
 
         # create 2x2 figure for the 4 panels
         self.fig, self.axs = plt.subplots(2, 2, figsize=(12, 10), facecolor='white')
-        
+    
         # configure axes
         self.ax_bt, self.ax_ip = self.axs[0, 0], self.axs[0, 1]
         self.ax_halpha, self.ax_avantes = self.axs[1, 0], self.axs[1, 1]
         
+        # Store time-based axes for synchronization
+        self.time_axes = [self.ax_bt, self.ax_ip, self.ax_halpha]
+    
         # white background for all axes
         for ax in self.axs.flatten():
             ax.set_facecolor('white')
-            if ax != self.ax_avantes:  # only connect events for time axes
-                ax.callbacks.connect('xlim_changed', self.on_xlim_changed)
-
+    
         # set permanent axis labels that won't disappear
         self.ax_bt.set_ylabel('Bt [mT]')
         self.ax_bt.set_xlabel('Time [ms]')
@@ -247,7 +252,41 @@ class TokamakApp:
         self.data_box_label = tk.Label(self.toolbar, text="", anchor="w", justify="left", font=("Courier New", 8))
         self.data_box_label.pack(side=tk.LEFT, padx=10)
 
+        # Connect zoom/pan events for synchronization
+        self.connect_zoom_events()
+        
         self.canvas.draw()
+
+    def connect_zoom_events(self):
+        """Connect zoom/pan events for all time-based axes"""
+        for ax in self.time_axes:
+            ax.callbacks.connect('xlim_changed', self.sync_time_axes)
+
+    def sync_time_axes(self, event_ax):
+        """Synchronize all time-based axes when one is zoomed/panned"""
+        if self.syncing_zoom:
+            return
+            
+        self.syncing_zoom = True
+        
+        try:
+            # Get current x-limits from the axis that triggered the event
+            xmin, xmax = event_ax.get_xlim()
+            
+            # Apply the same limits to all time-based axes
+            for ax in self.time_axes:
+                if ax != event_ax:
+                    ax.set_xlim(xmin, xmax)
+                    
+            # Adjust y-axis limits for all time-based axes
+            for ax in self.time_axes:
+                ax.relim()
+                ax.autoscale_view(scalex=False, scaley=True)
+                
+            self.canvas.draw_idle()
+            
+        finally:
+            self.syncing_zoom = False
 
     def load_shot(self):
         file_path = filedialog.askopenfilename(
@@ -332,7 +371,7 @@ class TokamakApp:
         self.clear_cursor_lines()
 
         # draw vertical line in time axes
-        for ax in [self.ax_bt, self.ax_ip, self.ax_halpha]:
+        for ax in self.time_axes:
             self.cursor_lines.append(ax.axvline(x=x, color='gray', linestyle='--', linewidth=0.8))
 
         # update data in label
@@ -395,16 +434,6 @@ class TokamakApp:
                 pass
         self.cursor_lines.clear()
 
-    def on_xlim_changed(self, event):
-        """When user zooms/pans, readjust Y limits"""
-        for ax in [self.ax_bt, self.ax_ip, self.ax_halpha]:
-            try:
-                ax.relim()
-                ax.autoscale_view(scalex=False, scaley=True)
-            except:
-                pass
-        self.canvas.draw_idle()
-
     def plot_data(self):
         # clear plot data but keep axis labels
         for ax in self.axs.flatten():
@@ -463,6 +492,9 @@ class TokamakApp:
 
         self.fig.tight_layout(pad=1.0)
         
+        # Reconnect zoom events after plotting new data
+        self.connect_zoom_events()
+        
         # redraw cursor if active
         if self.cursor_dynamics_enabled:
             self.draw_cursor_at(self.last_cursor_x)
@@ -476,7 +508,7 @@ class TokamakApp:
             
         self.clear_cursor_lines()
         
-        for ax in [self.ax_bt, self.ax_ip, self.ax_halpha]:
+        for ax in self.time_axes:
             self.cursor_lines.append(ax.axvline(x=x, color='gray', linestyle='--', linewidth=0.8))
             
         # update data
