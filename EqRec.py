@@ -67,9 +67,9 @@ def create_slow_motion_video(input_folder, output_file, original_fps=10000, play
         print(f"Playback speed: {slow_motion_factor:.1f}x slower than real-time")
 
 if __name__ == "__main__":
-    discharge_number = "2628"  # Change this for different discharges
+    discharge_number = "2623"  # Change this for different discharges
     input_folder = f"C:\\Users\\vogel\\Downloads\\{discharge_number}_EquiRecons"
-    output_file = f"C:\\Users\\vogel\\Downloads\\{discharge_number}_10fps.avi"
+    output_file = f"C:\\Users\\vogel\\Downloads\\{discharge_number}_10fps_EqRec.avi"
     
     # Adjust these parameters as needed:
     original_camera_fps = 10000  # Your camera's actual frame rate
